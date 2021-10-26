@@ -9,9 +9,10 @@
   "license": "MIT",
   "keywords": [],
   "scripts": {
+    "clean": "rimraf build:*",
     "tsc": "tsc",
     "start": "npm run build && node build/main/index.js",
-    "build": "run-p build:*",
+    "build": "npm-run-all clean && run-p build:* && copyfiles -u 1 src/**/*.ejs build/main",
     "build:main": "tsc -p tsconfig.json",
     "build:module": "tsc -p tsconfig.module.json",
     "fix": "run-s fix:*",
@@ -45,14 +46,20 @@
   },
   "dependencies": {
     "@bitauth/libauth": "^1.17.1",
+    "@commercetools/api-request-builder": "^5.6.3",
     "@commercetools/platform-sdk": "^1.18.1",
+    "@commercetools/sdk-auth": "^3.0.12",
     "cors": "^2.8.5",
     "cybersource-rest-client": "0.0.31",
     "dotenv": "^10.0.0",
+    "ejs": "^3.1.6",
     "express": "^4.17.1",
     "jsonwebtoken": "^8.5.1",
     "jwk-to-pem": "^2.0.5",
-    "jwt-decode": "^3.1.2"
+    "jwt-decode": "^3.1.2",
+    "moment": "^2.29.1",
+    "path": "^0.12.7",
+    "rimraf": "^3.0.2"
   },
   "devDependencies": {
     "@ava/typescript": "^1.1.1",
@@ -63,6 +70,7 @@
     "@typescript-eslint/parser": "^4.0.1",
     "ava": "^3.12.1",
     "codecov": "^3.5.0",
+    "copyfiles": "^2.4.1",
     "cspell": "^4.1.0",
     "cz-conventional-changelog": "^3.3.0",
     "eslint": "^7.8.0",
