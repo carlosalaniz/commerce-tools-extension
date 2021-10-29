@@ -7,6 +7,20 @@ const transactionDetails = (trasanctionData) => {
     };
 }
 
+const fieldMapper = (fields) => {
+    let actions = [] as  any;
+    const keys = Object.keys(fields);
+    keys.forEach((key, index) => {
+        actions.push(
+        {
+            'action': 'setCustomField',
+            'name': key,
+            'value': fields[key],
+        });
+    });
+    return actions;
+}
+
 function setTransactionId(paymentResponse, transactionDetail) {
     return {
         action: 'changeTransactionInteractionId',
@@ -69,12 +83,12 @@ const visaCardDetailsAction = (visaCheckoutData) => {
 
 const getAuthResponse = (paymentResponse, transactionDetail) => {
     let response = {};
-    if(paymentResponse.status == "AUTHORIZED" ) {
+    if("AUTHORIZED"  == paymentResponse.status) {
         const setTransaction =  setTransactionId(paymentResponse, transactionDetail);
         const setCustomField =  changeState(transactionDetail, "Success");
         response = createResponse(setTransaction, setCustomField, null);
     } 
-    else if(paymentResponse.status == "AUTHORIZED_PENDING_REVIEW") {
+    else if("AUTHORIZED_PENDING_REVIEW" == paymentResponse.status) {
         const setTransaction =  setTransactionId(paymentResponse, transactionDetail);
         const setCustomField =  changeState(transactionDetail, "Pending");
         response = createResponse(setTransaction, setCustomField, null);
@@ -104,7 +118,7 @@ function createResponse(setTransaction, setCustomField, paymentFailure) {
 
 const getServiceResponse = (paymentResponse, transactionDetail) => {
     let response = {};
-    if(paymentResponse.status == "PENDING" || paymentResponse.status == "REVERSED"){
+    if("PENDING" == paymentResponse.status || "REVERSED" == paymentResponse.status){
         const setTransaction =  setTransactionId(paymentResponse, transactionDetail);
         const setCustomField =  changeState(transactionDetail, "Success");
         response = createResponse(setTransaction, setCustomField, null);
@@ -129,7 +143,7 @@ const getCapturedAmount = (refundPaymentObj) => {
     let pendingCaptureAmount = 0;
     const refundTransaction = refundPaymentObj.transactions;
     const index = refundTransaction.findIndex((transaction,index) => {
-      if(transaction.type == "Charge") {
+      if("Charge" == transaction.type) {
         return true;
       }
       return index;
@@ -138,7 +152,7 @@ const getCapturedAmount = (refundPaymentObj) => {
       const capturedAmount = Number(refundTransaction[index].amount.centAmount);
       let refundedAmount = 0;
       refundTransaction.forEach(transaction => {
-        if(transaction.type == "Refund" && transaction.state == "Success")
+        if("Refund" == transaction.type && "Success" == transaction.state )
         {
           refundedAmount = refundedAmount + Number(transaction.amount.centAmount);
         }
@@ -155,4 +169,31 @@ const getEmptyResponse = () => {
         errors: []
       };
 }
-export default { transactionDetails, changeState, failureResponse, getAuthResponse, getServiceResponse, convertCentToAmount, convertAmountToCent, getCapturedAmount, getEmptyResponse, visaCardDetailsAction }
+
+const invalidOperationResponse = () => {
+   return {
+        actions :[],
+        errors :
+        [
+          {
+            code : "InvalidOperation",
+            message : "Cannot process this payment"
+          }
+       ]
+     };
+}
+
+const invalidInputResponse = () => {
+    return {
+         actions : [],
+         errors :
+         [
+           {
+             code : "InvalidInput",
+             message : "Cannot process this payment due to invalid input"
+           }
+        ]
+      };
+ }
+export default { fieldMapper, transactionDetails, changeState, failureResponse, getAuthResponse, getServiceResponse, convertCentToAmount, 
+    convertAmountToCent, getCapturedAmount, getEmptyResponse, visaCardDetailsAction, invalidOperationResponse, invalidInputResponse }

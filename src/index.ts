@@ -24,42 +24,57 @@ app.listen(port, () => {
 app.set("views", path.join(__dirname, "views/"));
 app.set("view engine", "ejs");
 
-app.get('/orders', async (req, res) => {
-    const orderlist = await commercetoolsApi.getorders();
-    const ordercount = orderlist.count;
-    error = "";
-    message = "";
-    res.render('orders',
-        {
-            count: ordercount,
-            orderlist: orderlist.results,
-            total: orderlist.total,
-            moment: moment,
-            amountConversion: paymentService.convertCentToAmount
-        });
+app.get('/orders', async(req, res) => {
+  let orderResult: any;
+  let ordercount = 0;
+  let total = 0;
+  let ordersList: any;
+  error = "";
+  message = "";
+  ordersList = await commercetoolsApi.getorders();
+  if(null != ordersList) {
+    ordercount = ordersList.count;
+    orderResult = ordersList.results;
+    total = ordersList.total;
+  }
+  res.render('orders',
+  {
+      count: ordercount,
+      orderlist: orderResult,
+      total: total,
+      moment: moment,
+      amountConversion: paymentService.convertCentToAmount
+  });
 })
 
-app.get('/paymentdetails', async (req, res) => {
-    var convertedpaymentid;
-    let pendingCaptureAmount = 0;
-    var paymentid = req.query.id;
-    convertedpaymentid = paymentid;
-    convertedpaymentid = convertedpaymentid.replace(/\s+/g, "");
-    const paymentdetails = await commercetoolsApi.retrievePayment(convertedpaymentid);
-    const refundTransaction = paymentdetails.transactions;
+app.get('/paymentdetails', async(req, res) => {
+    let paymentId;
+    let paymentDetails: any;
+    let convertedPaymentId = "";
+    let pendingCaptureAmount = 0.0;
     let authReversalFlag = false;
-    refundTransaction.forEach(transaction => {
-      if(transaction.type == "CancelAuthorization" && transaction.state == "Success")
-      {
-        authReversalFlag = true;
+    if("id" in req.query) {
+      paymentId = req.query.id;
+      convertedPaymentId = paymentId.replace(/\s+/g, "");
+      paymentDetails = await commercetoolsApi.retrievePayment(convertedPaymentId);
+      if(null != paymentDetails) {
+        const refundTransaction = paymentDetails.transactions;
+        if(null != refundTransaction) {
+          refundTransaction.forEach(transaction => {
+            if("CancelAuthorization" == transaction.type && "Success" == transaction.state)
+            {
+              authReversalFlag = true;
+            }
+          });
+          if(!authReversalFlag) {
+            pendingCaptureAmount = paymentService.getCapturedAmount(paymentDetails);
+          }
+        }
       }
-    });
-    if(!authReversalFlag) {
-      pendingCaptureAmount = paymentService.getCapturedAmount(paymentdetails);
     }
     res.render('paymentdetails', {
-      id: convertedpaymentid,
-      payments: paymentdetails,
+      id: convertedPaymentId,
+      payments: paymentDetails,
       captureAmount: pendingCaptureAmount,
       amountConversion: paymentService.convertCentToAmount,
       error: error,
@@ -68,62 +83,89 @@ app.get('/paymentdetails', async (req, res) => {
 })
 
 app.post('/api/extension/payment/create', async(req, res) => {
-  const paymentObj = req.body.resource.obj;
-  const paymentMethod = paymentObj.paymentMethodInfo.method;
   let response = {};
-  switch(paymentMethod) {
-    case "creditCard": {
-      const microFormKeys = await flexKeys.keys();
-      if(microFormKeys) {
-        const actions = flexKeys.fieldMapper(microFormKeys);
-          response = {
-          actions: actions,
-          errors: []
-        }; 
-      } 
-      else {
-        response = paymentService.getEmptyResponse(); 
+  let actions = [];
+  let paymentObj: any;
+  let microFormKeys: any;
+  let paymentMethod = "";
+  if(("body" in req) && ("resource" in req.body) && ("obj" in req.body.resource)) {
+    paymentObj = req.body.resource.obj;
+    paymentMethod = paymentObj.paymentMethodInfo.method;
+    if(paymentMethod) {
+      switch(paymentMethod) {
+        case "creditCard": {
+          microFormKeys =  await flexKeys.keys();
+          if(null != microFormKeys) {
+              actions = paymentService.fieldMapper(microFormKeys);
+              response = {
+              actions: actions,
+              errors: []
+            }; 
+          } 
+          else { 
+            response = paymentService.invalidOperationResponse(); 
+          }
+          break;
+        }
+        case "visaCheckout": {
+          response = paymentService.getEmptyResponse(); 
+        }
       }
-      break;
     }
-    case "visaCheckout": {
+    else {
+      console.log("Payment details doesn't contain payment method");
       response = paymentService.getEmptyResponse(); 
     }
+  }
+  else {
+    console.log("Unable to recieve data from Commercetools");
+    response = paymentService.getEmptyResponse(); 
   }
   res.send(response);
 });
 
-app.post('/api/extension/payment/update', async (req, res) => {
-  var updateResponse;
-  var cartObj;
-  const updatePaymentObj = req.body.resource.obj;
-  if(updatePaymentObj.transactions.length > 0) { //If there is no transaction created for the payment
-    const updateTransactions = updatePaymentObj.transactions.pop();
-    if(updateTransactions.type == "Authorization") {
-      updateResponse = await paymentHandler.authorizationHandler(updatePaymentObj, cartObj, updateTransactions); 
+app.post('/api/extension/payment/update', async(req, res) => {
+  let updateResponse = {};
+  let updatePaymentObj: any;
+  let updateTransactions: any;
+  if(("body" in req) && ("resource" in req.body) && ("obj" in req.body.resource)) {
+    updatePaymentObj = req.body.resource.obj;
+    if(0 < updatePaymentObj.transactions.length) { //If there is no transaction created for the payment
+      updateTransactions = updatePaymentObj.transactions.pop();
+      if("Authorization" == updateTransactions.type) {
+        updateResponse = await paymentHandler.authorizationHandler(updatePaymentObj, updateTransactions); 
+      } else {
+        updateResponse = await paymentHandler.orderManagementHandler(req.body.resource.id, updatePaymentObj, updateTransactions); 
+      }
     } else {
-      updateResponse = await paymentHandler.orderManagementHandler(req.body.resource.id, updatePaymentObj, updateTransactions); 
-    }
-  } else {
-    updateResponse = paymentService.getEmptyResponse();
+      updateResponse = paymentService.invalidInputResponse();
+    } 
   }
-res.send(updateResponse);
+  else {
+    console.log("Unable to recieve data from Commercetools");
+    updateResponse = paymentService.getEmptyResponse(); 
+  }
+  res.send(updateResponse);
 });
 
-app.get('/capture', async (req, res) => {
+app.get('/capture', async(req, res) => {
+  let capturePaymentObj: any;
+  let transactionresponse: any;
+  let transactionObject: any;
+  let latestTransaction: any;
   const paymentId = req.query.id;
   try {
-    const capturePaymentObj = await commercetoolsApi.retrievePayment(paymentId);
-    const transactionObject = {
+    capturePaymentObj = await commercetoolsApi.retrievePayment(paymentId);
+    transactionObject = {
       paymentId: paymentId,
       version: capturePaymentObj.version,
       amount: capturePaymentObj.amountPlanned,
       type: "Charge",
       state: "Initial"
     };
-    const transactionresponse = await commercetoolsApi.addTransaction(transactionObject);
-    const latestTransaction = transactionresponse.transactions.pop();
-    if (latestTransaction.type == "Charge" && latestTransaction.state == "Success") {
+    transactionresponse = await commercetoolsApi.addTransaction(transactionObject);
+    latestTransaction = transactionresponse.transactions.pop();
+    if ("Charge" == latestTransaction.type && "Success" == latestTransaction.state) {
       message = "Capture is completed successfully"
       error = "";
       }
@@ -137,28 +179,37 @@ app.get('/capture', async (req, res) => {
   res.redirect(`/paymentdetails?id=${paymentId}`)
 });
 
-app.get('/refund', async (req,res) => {
+app.get('/refund', async(req,res) => {
+  let refundPaymentObj : any;
+  let addTransaction: any;
+  let transactionObject: any;
+  let latestTransaction: any;
+  let pendingCaptureAmount = 0.0;
   var paymentId = req.query.refundId;
   var refundAmount = Number(req.query.refundAmount);
-  const refundPaymentObj = await commercetoolsApi.retrievePayment(paymentId);
-  const pendingCaptureAmount = paymentService.getCapturedAmount(refundPaymentObj);
-  if(refundAmount > pendingCaptureAmount)
+  refundPaymentObj = await commercetoolsApi.retrievePayment(paymentId);
+  pendingCaptureAmount = paymentService.getCapturedAmount(refundPaymentObj);
+  if(0 == refundAmount){
+    error = "Refund amount should be greater than zero";
+    message = "";
+  }
+  else if(refundAmount > pendingCaptureAmount)
   {
     error = "Cannot perform refund - amount exceeded captured amount";
     message = "";
   }
   else {
     refundPaymentObj.amountPlanned.centAmount =  paymentService.convertAmountToCent(refundAmount);
-    const transactionObject = {
+    transactionObject = {
       paymentId: paymentId,
       version: refundPaymentObj.version,
       amount: refundPaymentObj.amountPlanned,
       type: "Refund",
       state: "Initial"
     };
-    const addTransaction = await commercetoolsApi.addTransaction(transactionObject);
-    const latestTransaction = addTransaction.transactions.pop();
-    if (latestTransaction.type == "Refund" && latestTransaction.state == "Success") {
+    addTransaction = await commercetoolsApi.addTransaction(transactionObject);
+    latestTransaction = addTransaction.transactions.pop();
+    if ("Refund" == latestTransaction.type && "Success" == latestTransaction.state) {
       message = "Refund is completed successfully";
       error = "";
     }
@@ -170,19 +221,23 @@ app.get('/refund', async (req,res) => {
   res.redirect(`/paymentdetails?id=${paymentId}`)
 })
 
-app.get('/authReversal',async (req,res)=>{
+app.get('/authReversal', async(req,res)=>{
+  let authReversalObj: any;
+  let addTransaction: any;
+  let transactionObject: any;
+  let latestTransaction: any;
   var paymentId = req.query.id;
-  var authReversalObj = await commercetoolsApi.retrievePayment(paymentId);
-  const transactionObject = {
+  authReversalObj = await commercetoolsApi.retrievePayment(paymentId);
+  transactionObject = {
     paymentId: paymentId,
     version: authReversalObj.version,
     amount: authReversalObj.amountPlanned,
     type: "CancelAuthorization",
     state: "Initial"
   };
-  const addTransaction = await commercetoolsApi.addTransaction(transactionObject);
-  const latestTransaction = addTransaction.transactions.pop();
-  if (latestTransaction.type == "CancelAuthorization" && latestTransaction.state == "Success") {
+  addTransaction = await commercetoolsApi.addTransaction(transactionObject);
+  latestTransaction = addTransaction.transactions.pop();
+  if ("CancelAuthorization" == latestTransaction.type && "Success" == latestTransaction.state) {
     message = "Authorization reversal is completed successfully";
     error = "";
   }

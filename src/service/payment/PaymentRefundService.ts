@@ -1,7 +1,7 @@
 var cybersourceRestApi = require('cybersource-rest-client');
 import paymentService from '../../utils/PaymentService'; 
 
-const refundResponse = async (payment, captureId) => {
+const refundResponse = async (payment, captureId, updateTransactions) => {
     let paymentResponse = {
         httpCode: null,
         transactionId: null,
@@ -27,7 +27,7 @@ const refundResponse = async (payment, captureId) => {
         clientReferenceInformation.partner = clientReferenceInformationpartner;
         requestObj.clientReferenceInformation = clientReferenceInformation;
 
-        if (payment.paymentMethodInfo.method == "visaCheckout") {
+        if ("visaCheckout" == payment.paymentMethodInfo.method) {
             var processingInformation = new cybersourceRestApi.Ptsv2paymentsProcessingInformation();
             processingInformation.paymentSolution = payment.paymentMethodInfo.method;
             processingInformation.visaCheckoutId = payment.custom.fields.isv_token;
@@ -37,8 +37,7 @@ const refundResponse = async (payment, captureId) => {
         var orderInformation = new cybersourceRestApi.Ptsv2paymentsidrefundsOrderInformation();
 		var orderInformationAmountDetails = new cybersourceRestApi.Ptsv2paymentsidcapturesOrderInformationAmountDetails();
 
-        const refundTransaction = payment.transactions.pop();
-        const refundAmount = paymentService.convertCentToAmount(refundTransaction.amount.centAmount);
+        const refundAmount = paymentService.convertCentToAmount(updateTransactions.amount.centAmount);
         
         orderInformationAmountDetails.totalAmount = refundAmount;
         orderInformationAmountDetails.currency = payment.amountPlanned.currencyCode;

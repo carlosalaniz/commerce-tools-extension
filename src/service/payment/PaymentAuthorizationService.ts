@@ -2,6 +2,10 @@ var cybersourceRestApi = require('cybersource-rest-client');
 import paymentService from '../../utils/PaymentService'; 
 
 const getAuthorizationResponse = async(payment, cart) => {
+    let j = 0;
+    let totalAmount = 0.0;
+    let unitPrice = 0.0;
+    let shippingCost = 0.0;
     let paymentResponse = {
         httpCode: null,
         transactionId: null,
@@ -9,7 +13,6 @@ const getAuthorizationResponse = async(payment, cart) => {
         message: null
     };
     return new Promise(function (resolve, reject) {
-        let j = 0;
         const apiClient = new cybersourceRestApi.ApiClient();
         var requestObj = new cybersourceRestApi.CreatePaymentRequest();
         const configObject = {
@@ -29,7 +32,7 @@ const getAuthorizationResponse = async(payment, cart) => {
         requestObj.clientReferenceInformation = clientReferenceInformation;
 
         var processingInformation = new cybersourceRestApi.Ptsv2paymentsProcessingInformation();
-        if (process.env.CYBS_DECISION_MANAGER == "false") {
+        if ("false" == process.env.CYBS_DECISION_MANAGER) {
             processingInformation.actionList = "DECISION_SKIP";
         }
         else {
@@ -37,7 +40,7 @@ const getAuthorizationResponse = async(payment, cart) => {
         }
         requestObj.processingInformation = processingInformation;
 
-        const totalAmount = paymentService.convertCentToAmount(payment.amountPlanned.centAmount);
+        totalAmount = paymentService.convertCentToAmount(payment.amountPlanned.centAmount);
 
         var orderInformation = new cybersourceRestApi.Ptsv2paymentsOrderInformation();
         var orderInformationAmountDetails = new cybersourceRestApi.Ptsv2paymentsOrderInformationAmountDetails();
@@ -74,7 +77,7 @@ const getAuthorizationResponse = async(payment, cart) => {
         orderInformation.lineItems= [];
         cart.lineItems.forEach(lineItem => {
             var orderInformationLineItems = new cybersourceRestApi.Ptsv2paymentsOrderInformationLineItems();
-            const unitPrice = paymentService.convertCentToAmount(lineItem.price.value.centAmount);
+            unitPrice = paymentService.convertCentToAmount(lineItem.price.value.centAmount);
             orderInformationLineItems.productName = lineItem.name.en;
             orderInformationLineItems.quantity = lineItem.quantity;
             orderInformationLineItems.productSku = lineItem.variant.sku;
@@ -84,7 +87,7 @@ const getAuthorizationResponse = async(payment, cart) => {
             j++;
         });
         if('shippingInfo' in cart){
-            const shippingCost = paymentService.convertCentToAmount(cart.shippingInfo.price.centAmount);
+            shippingCost = paymentService.convertCentToAmount(cart.shippingInfo.price.centAmount);
             var orderInformationLineItems = new cybersourceRestApi.Ptsv2paymentsOrderInformationLineItems();
             orderInformationLineItems.productName = cart.shippingInfo.shippingMethodName;
             orderInformationLineItems.quantity = "1";
@@ -96,11 +99,11 @@ const getAuthorizationResponse = async(payment, cart) => {
         }
         requestObj.orderInformation = orderInformation;
 
-        if(payment.paymentMethodInfo.method == "creditCard") {
+        if("creditCard" == payment.paymentMethodInfo.method) {
             var tokenInformation = new cybersourceRestApi.Ptsv2paymentsTokenInformation();
             tokenInformation.transientTokenJwt = payment.custom.fields.isv_token;
             requestObj.tokenInformation = tokenInformation;
-        } else if(payment.paymentMethodInfo.method == "visaCheckout") {
+        } else if("visaCheckout" == payment.paymentMethodInfo.method) {
             var processingInformation = new cybersourceRestApi.Ptsv2paymentsProcessingInformation();
             processingInformation.paymentSolution = payment.paymentMethodInfo.method;
             processingInformation.visaCheckoutId = payment.custom.fields.isv_token;

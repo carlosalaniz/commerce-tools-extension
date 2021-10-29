@@ -33,8 +33,6 @@ const getVisaCheckoutData = (paymentResponse) => {
                 visaCheckoutData.shipToFieldGroup = data.orderInformation.shipTo;
                 visaCheckoutData.cardFieldGroup = data.paymentInformation.card;
             }
-            console.log('\nResponse : ' + JSON.stringify(response));
-            console.log('\nResponse Code of Retrieve a Transaction : ' + JSON.stringify(response['status']));
             resolve(visaCheckoutData);
         });
     }).catch(error => {

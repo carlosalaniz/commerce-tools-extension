@@ -2,6 +2,7 @@ var cybersourceRestApi = require('cybersource-rest-client');
 import paymentService from '../../utils/PaymentService'; 
 
 const captureResponse = async (payment, cart, authId) => {
+    let j=0;
     let paymentResponse = {
         httpCode: null,
         transactionId: null,
@@ -9,7 +10,6 @@ const captureResponse = async (payment, cart, authId) => {
         message: null
     };
     return new Promise(function (resolve, reject) {
-        let j=0;
         const apiClient = new cybersourceRestApi.ApiClient();
         var requestObj = new cybersourceRestApi.CapturePaymentRequest();
         const configObject = {
@@ -28,7 +28,7 @@ const captureResponse = async (payment, cart, authId) => {
         clientReferenceInformation.partner = clientReferenceInformationpartner;
         requestObj.clientReferenceInformation = clientReferenceInformation;
 
-        if (payment.paymentMethodInfo.method == "visaCheckout") {
+        if ("visaCheckout" == payment.paymentMethodInfo.method) {
             var processingInformation = new cybersourceRestApi.Ptsv2paymentsProcessingInformation();
             processingInformation.paymentSolution = payment.paymentMethodInfo.method;
             processingInformation.visaCheckoutId = payment.custom.fields.isv_token;

@@ -158,74 +158,73 @@
     <%} %>
     <table>
         <% var latestTransaction=payments.transactions[payments.transactions.length-1]%>
-            <th>Payment details</th>
+        <th>Payment details</th>
+        <tr>
+            <td>Payment Id:</td>
+            <td><%= payments.id%></td>
+        </tr>
+        <tr>
+            <td>Amount:</th>
+            <td><%=payments.amountPlanned.currencyCode%> <%=amountConversion(payments.amountPlanned.centAmount)%>
+            </td>
+        </tr>
+        <tr>
+            <td>Payment Interface:</td>
+            <td><%= payments.paymentMethodInfo.paymentInterface%></td>
+        </tr>
+        <tr>
+            <td>Payment Method:</td>
+            <td><%= payments.paymentMethodInfo.method%></td>
+        </tr>
+        <% if(payments.custom.fields.isv_token!="" ) {%>
             <tr>
-                <td>Payment Id:</td>
-                <td><%= payments.id%></td>
+                <td>Token:</td>
+                <td>
+                    <%=payments.custom.fields.isv_token%>
+                </td>
             </tr>
+        <% } %>
             <tr>
-                <td>Amount:</th>
-                <td><%=payments.amountPlanned.currencyCode%> <%=amountConversion(payments.amountPlanned.centAmount)%>
+                <td>Credit Card Number:</td>
+                <td>
+                    <%= payments.custom.fields.isv_maskedPan %>
                 </td>
             </tr>
             <tr>
-                <td>Payment Interface:</td>
-                <td><%= payments.paymentMethodInfo.paymentInterface%></td>
+                <td>Credit Card Type:</td>
+                <td>
+                    <%= payments.custom.fields.isv_cardType %>
+                </td>
             </tr>
             <tr>
-                <td>Payment Method:</td>
-                <td><%= payments.paymentMethodInfo.method%></td>
+                <td>Credit Card Expiry:</td>
+                <td>
+                    <%=payments.custom.fields.isv_cardExpiryMonth%>/<%=payments.custom.fields.isv_cardExpiryYear %>
+                </td>
             </tr>
-            <% if(payments.custom.fields.isv_token!="" ) {%>
-                <tr>
-                    <td>Token:</td>
-                    <td>
-                        <%=payments.custom.fields.isv_token%>
-                    </td>
-                </tr>
-            <% } %>
-                <tr>
-                    <td>Credit Card Number:</td>
-                    <td>
-                        <%= payments.custom.fields.isv_maskedPan %>
-                    </td>
-                </tr>
-                <tr>
-                    <td>Credit Card Type:</td>
-                    <td>
-                        <%= payments.custom.fields.isv_cardType %>
-                    </td>
-                </tr>
-                <tr>
-                    <td>Credit Card Expiry:</td>
-                    <td>
-                        <%=payments.custom.fields.isv_cardExpiryMonth%>/<%=payments.custom.fields.isv_cardExpiryYear %>
-                    </td>
-                </tr>
-                <% if(latestTransaction){ %>
-                    <tr>
-                        <td>Latest Transaction Id:</td>
-                        <td><%=latestTransaction.id%></td>
-                    </tr>
-                    <tr>
-                        <td>Latest Transaction Interaction Id:</td>
-                        <td><%=latestTransaction.interactionId%></td>
-                    </tr>
-                    <tr>
-                        <td>Latest Transaction Amount:</td>
-                        <td><%=latestTransaction.amount.currencyCode%> <%=amountConversion(latestTransaction.amount.centAmount)%>
-                        </td>
-                    </tr>
-                    <tr>
-                        <td>Latest Transaction Type:</td>
-                        <td><%=latestTransaction.type%></td>
-                    </tr>
-                    <tr>
-                        <td>Latest Transaction State:</td>
-                        <td><%=latestTransaction.state %></td>
-                    </tr>
-                <% } %>
-        <!-- <tbody> -->
+        <% if(latestTransaction){ %>
+            <tr>
+                <td>Latest Transaction Id:</td>
+                <td><%=latestTransaction.id%></td>
+            </tr>
+            <tr>
+                <td>Latest Transaction Interaction Id:</td>
+                <td><%=latestTransaction.interactionId%></td>
+            </tr>
+            <tr>
+                <td>Latest Transaction Amount:</td>
+                <td><%=latestTransaction.amount.currencyCode%> <%=amountConversion(latestTransaction.amount.centAmount)%>
+                </td>
+            </tr>
+            <tr>
+                <td>Latest Transaction Type:</td>
+                <td><%=latestTransaction.type%></td>
+            </tr>
+            <tr>
+                <td>Latest Transaction State:</td>
+                <td><%=latestTransaction.state %></td>
+            </tr>
+        <% } %>
     </table>
     <br>
     <% if(captureAmount) {%>
@@ -233,12 +232,20 @@
     <% } %>
     <br>
     <a class="abutton" href="/orders" role="button">Back</a>
-    <a class="abutton" href="/capture?id=<%=id%>" role="button">Capture</a>
-    <a class="abutton" href="/authreversal?id=<%=id%>" role="button">Reverse</a>
-    <form action="/refund">
-        <input type="hidden" name="refundId" id="refundId" value="<%=id%>" />
-        Refund amount: <input type="text" name="refundAmount" id="refundAmount" size="6" value="" />
-        <button type="submit" class="abutton" >Refund</button>
-    </form>
+    <% if(latestTransaction) { %>
+        <% if(latestTransaction.type=='Authorization' && latestTransaction.state=='Success' ) { %>
+            <a class="abutton" href="/capture?id=<%=id%>" role="button">Capture</a>
+            <a class="abutton" href="/authreversal?id=<%=id%>" role="button">Reverse</a>
+        <% } %>
+        <% if(("Charge" == latestTransaction.type && "Success" == latestTransaction.state) 
+        || ((captureAmount && "Refund" == latestTransaction.type) 
+        && (("Success" == latestTransaction.state) || ("Failure" == latestTransaction.state)))) {%>
+            <form action="/refund">
+                <input type="hidden" name="refundId" id="refundId" value="<%=id%>"/>
+                Refund amount: <input type="text" name="refundAmount" id="refundAmount" size="6" value="" required pattern="^[+]?([1-9][0-9]*(?:[\.][0-9]*)?|0*\.0*[1-9][0-9]*)(?:[eE][+-][0-9]+)?$" title="Refund amount should be greater than zero" /> 
+                <button type="submit" class="abutton" >Refund</button>
+            </form>
+        <% } %>
+    <% } %>
 </body>
 </html>
